@@ -22,14 +22,15 @@ def mean_fitness(population: List[Cromossomo]) -> float:
     return sum([cromossomo.get_fitness() for cromossomo in population]) / len(population)
 
 
-def selection(population: List[Cromossomo]) -> Cromossomo:
-    total_fitness = sum([cromossomo.get_fitness() for cromossomo in population])
-    r = random.uniform(0, total_fitness)
-    accumulator = 0
-    for individual in population:
-        accumulator += individual.get_fitness()
-        if accumulator >= r:
-            return individual
+def selection_by_roulette(population: List[Cromossomo],  fitness: List[float]) -> Cromossomo:
+    max_fitness = sum(fitness)
+    pick = random.uniform(0, max_fitness)
+    current = 0
+    for i, cromossomo in enumerate(population):
+        current += fitness[i]
+        if current > pick:
+            return cromossomo
+
 
 def crossover(parent_1: Cromossomo, parent_2: Cromossomo) -> Cromossomo:
     crossover_point = random.randint(0, len(parent_1.binary_value) - 1)
@@ -37,53 +38,58 @@ def crossover(parent_1: Cromossomo, parent_2: Cromossomo) -> Cromossomo:
     return Cromossomo(child_binary)
 
 def mutation(individual: Cromossomo, mutation_strength: float = 0.1) -> Cromossomo:
-    binary_value = list(individual.binary_value)
-    for i in range(len(binary_value)):
-        if random.random() < mutation_strength:
-            binary_value[i] = '1' if binary_value[i] == '0' else '0'
-    return Cromossomo(''.join(binary_value))
+    mutated_binary = ''.join(
+        [gene if random.random() > mutation_strength else str(1 - int(gene)) for gene in individual.binary_value]
+    )
+    return Cromossomo(mutated_binary)
+
+
 
 def main():
-    POPULATION_SIZE = 10
+    POPULATION_SIZE = 100
     CROMOSSOMO_SIZE = 4
     MUTATION_STRENGTH = 0.01
     GENERATIONS = 100
-    ELITISM = True
-    ELITISM_SIZE = 3
+    PERCENTAGE_REPRODUCTION = 0.7
 
     population = generate_population(POPULATION_SIZE, CROMOSSOMO_SIZE)
-    best_fitnesses = []
-    history = []
+    mean_fitness_by_generation = []
+    best_fitness_by_generation = []
 
-    for generation in range(GENERATIONS):
+    for _ in range(GENERATIONS):
+
+        fitness = [cromossomo.get_fitness() for cromossomo in population]
         new_population = []
-        print(f'Generation {generation} Mean Fitness: {mean_fitness(population)}')
-        for _ in range(POPULATION_SIZE - ELITISM_SIZE if ELITISM else POPULATION_SIZE):
-            parent_1 = selection(population)
-            parent_2 = selection(population)
-            child = crossover(parent_1, parent_2)
-            child = mutation(child, MUTATION_STRENGTH)
-            new_population.append(child)
+        best_fitness_by_generation.append(max(fitness))
+        mean_fitness_by_generation.append(mean_fitness(population))
 
-            print(f'Parent 1: {parent_1} Parent 2: {parent_2} Child: {child}')
-        
-       
-            if ELITISM:
-                population.sort(key=lambda x: x.get_fitness(), reverse=True)
-                new_population.extend(population[:ELITISM_SIZE])
-        
-        history.append(mean_fitness(population))
+        while len(new_population) < POPULATION_SIZE * PERCENTAGE_REPRODUCTION:
+            parent1 = selection_by_roulette(population, fitness)
+            parent2 = selection_by_roulette(population, fitness)
 
-        print("============================================")
+            son1 = mutation(crossover(parent1, parent2), MUTATION_STRENGTH)
+            son2 = mutation(crossover(parent1, parent2), MUTATION_STRENGTH)
+
+            new_population.append(son1)
+
+            if len(new_population) < POPULATION_SIZE * PERCENTAGE_REPRODUCTION:
+                new_population.append(son2)
+
+            
+
+        while len(new_population) < POPULATION_SIZE:
+            new_population.append(selection_by_roulette(population, fitness))
         
-        population = new_population
-        best_fitnesses.append(max([cromossomo.get_fitness() for cromossomo in population]))
+        population = new_population[:POPULATION_SIZE]
     
-    plt.plot(range(len(history)), history)
+    plt.plot(mean_fitness_by_generation, label='Médio')
+    plt.plot(best_fitness_by_generation, label='Melhor', linestyle='--')
+
     plt.grid(True, zorder=0)
     plt.title("Evolução do fitness médio ao longo das gerações")
     plt.xlabel("Geração")
-    plt.ylabel("Fitness medio")
+    plt.ylabel("Fitness")
+    plt.legend()  
     plt.show()
 
 
